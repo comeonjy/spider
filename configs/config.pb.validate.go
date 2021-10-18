@@ -84,6 +84,8 @@ func (m *Config) Validate() error {
 
 	// no validation rules for JwtKey
 
+	// no validation rules for RunSpider
+
 	return nil
 }
 

@@ -12,31 +12,31 @@ import (
 	"spider/internal/data"
 )
 
-var ProviderSet = wire.NewSet(NewSchedulerService)
+var ProviderSet = wire.NewSet(NewSpiderService)
 
-type SchedulerService struct {
-	v1.UnimplementedSchedulerServer
+type SpiderService struct {
+	v1.UnimplementedSpiderServer
 	conf     configs.Interface
 	logger   *xlog.Logger
-	workRepo data.WorkRepo
+	taskRepo data.TaskRepo
 }
 
-func NewSchedulerService(conf configs.Interface, logger *xlog.Logger, workRepo data.WorkRepo) *SchedulerService {
-	return &SchedulerService{
+func NewSpiderService(conf configs.Interface, logger *xlog.Logger, taskRepo data.TaskRepo) *SpiderService {
+	return &SpiderService{
 		conf:     conf,
-		workRepo: workRepo,
+		taskRepo: taskRepo,
 		logger:   logger,
 	}
 }
 
-func (svc *SchedulerService) AuthFuncOverride(ctx context.Context, fullMethodName string) (context.Context, error) {
+func (svc *SpiderService) AuthFuncOverride(ctx context.Context, fullMethodName string) (context.Context, error) {
 	if mdIn, ok := metadata.FromIncomingContext(ctx); ok {
 		mdIn.Get("")
 	}
 	return ctx, nil
 }
 
-func (svc *SchedulerService) Ping(ctx context.Context, in *v1.Empty) (*v1.Result, error) {
+func (svc *SpiderService) Ping(ctx context.Context, in *v1.Empty) (*v1.Result, error) {
 	return &v1.Result{
 		Code:    200,
 		Message: "pong",

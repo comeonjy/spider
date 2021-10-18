@@ -7,16 +7,18 @@ import (
 	"context"
 
 	"github.com/comeonjy/go-kit/pkg/xlog"
-	"spider/configs"
 	"github.com/google/wire"
+	"spider/configs"
+	"spider/internal/scheduler"
 
 	"spider/internal/data"
 	"spider/internal/server"
 	"spider/internal/service"
 )
 
-func InitApp(ctx context.Context,logger *xlog.Logger) *App {
+func InitApp(ctx context.Context, logger *xlog.Logger) *App {
 	panic(wire.Build(
+		scheduler.ProviderSet,
 		server.ProviderSet,
 		service.ProviderSet,
 		newApp,

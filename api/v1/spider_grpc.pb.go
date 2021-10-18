@@ -14,86 +14,86 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// SchedulerClient is the client API for Scheduler service.
+// SpiderClient is the client API for Spider service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type SchedulerClient interface {
+type SpiderClient interface {
 	Ping(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Result, error)
 }
 
-type schedulerClient struct {
+type spiderClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewSchedulerClient(cc grpc.ClientConnInterface) SchedulerClient {
-	return &schedulerClient{cc}
+func NewSpiderClient(cc grpc.ClientConnInterface) SpiderClient {
+	return &spiderClient{cc}
 }
 
-func (c *schedulerClient) Ping(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Result, error) {
+func (c *spiderClient) Ping(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Result, error) {
 	out := new(Result)
-	err := c.cc.Invoke(ctx, "/task_system.scheduler.v1.Scheduler/Ping", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/spider.v1.Spider/Ping", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// SchedulerServer is the server API for Scheduler service.
-// All implementations must embed UnimplementedSchedulerServer
+// SpiderServer is the server API for Spider service.
+// All implementations must embed UnimplementedSpiderServer
 // for forward compatibility
-type SchedulerServer interface {
+type SpiderServer interface {
 	Ping(context.Context, *Empty) (*Result, error)
-	mustEmbedUnimplementedSchedulerServer()
+	mustEmbedUnimplementedSpiderServer()
 }
 
-// UnimplementedSchedulerServer must be embedded to have forward compatible implementations.
-type UnimplementedSchedulerServer struct {
+// UnimplementedSpiderServer must be embedded to have forward compatible implementations.
+type UnimplementedSpiderServer struct {
 }
 
-func (UnimplementedSchedulerServer) Ping(context.Context, *Empty) (*Result, error) {
+func (UnimplementedSpiderServer) Ping(context.Context, *Empty) (*Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedSchedulerServer) mustEmbedUnimplementedSchedulerServer() {}
+func (UnimplementedSpiderServer) mustEmbedUnimplementedSpiderServer() {}
 
-// UnsafeSchedulerServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to SchedulerServer will
+// UnsafeSpiderServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SpiderServer will
 // result in compilation errors.
-type UnsafeSchedulerServer interface {
-	mustEmbedUnimplementedSchedulerServer()
+type UnsafeSpiderServer interface {
+	mustEmbedUnimplementedSpiderServer()
 }
 
-func RegisterSchedulerServer(s grpc.ServiceRegistrar, srv SchedulerServer) {
-	s.RegisterService(&Scheduler_ServiceDesc, srv)
+func RegisterSpiderServer(s grpc.ServiceRegistrar, srv SpiderServer) {
+	s.RegisterService(&Spider_ServiceDesc, srv)
 }
 
-func _Scheduler_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Spider_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SchedulerServer).Ping(ctx, in)
+		return srv.(SpiderServer).Ping(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/task_system.scheduler.v1.Scheduler/Ping",
+		FullMethod: "/spider.v1.Spider/Ping",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SchedulerServer).Ping(ctx, req.(*Empty))
+		return srv.(SpiderServer).Ping(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Scheduler_ServiceDesc is the grpc.ServiceDesc for Scheduler service.
+// Spider_ServiceDesc is the grpc.ServiceDesc for Spider service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Scheduler_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "task_system.scheduler.v1.Scheduler",
-	HandlerType: (*SchedulerServer)(nil),
+var Spider_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "spider.v1.Spider",
+	HandlerType: (*SpiderServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Ping",
-			Handler:    _Scheduler_Ping_Handler,
+			Handler:    _Spider_Ping_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

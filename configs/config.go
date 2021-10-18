@@ -9,8 +9,8 @@ import (
 	"github.com/comeonjy/go-kit/pkg/xconfig"
 	"github.com/comeonjy/go-kit/pkg/xconfig/apollo"
 	"github.com/comeonjy/go-kit/pkg/xenv"
-	"spider/pkg/consts"
 	"github.com/google/wire"
+	"spider/pkg/consts"
 )
 
 var ProviderSet = wire.NewSet(NewConfig)

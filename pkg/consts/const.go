@@ -1,7 +1,7 @@
 package consts
 
 const (
-	AppName    = "go-layout"
+	AppName    = "spider"
 	AppVersion = "v1.0"
 
 	TraceName = "trace_id" // trace名
@@ -9,7 +9,7 @@ const (
 
 // apollo 配置
 const (
-	ApolloAppID     = "go-layout"
+	ApolloAppID     = "spider"
 	ApolloCluster   = "default"
 	ApolloNamespace = "application"
 )

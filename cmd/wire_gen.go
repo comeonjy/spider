@@ -10,6 +10,7 @@ import (
 	"github.com/comeonjy/go-kit/pkg/xlog"
 	"spider/configs"
 	"spider/internal/data"
+	"spider/internal/scheduler"
 	"spider/internal/server"
 	"spider/internal/service"
 )
@@ -22,11 +23,14 @@ import (
 
 func InitApp(ctx context.Context, logger *xlog.Logger) *App {
 	configsInterface := configs.NewConfig(ctx)
-	dataData := data.NewData(configsInterface)
-	workRepo := data.NewWorkRepo(dataData)
-	schedulerService := service.NewSchedulerService(configsInterface, logger, workRepo)
-	grpcServer := server.NewGrpcServer(schedulerService, configsInterface, logger)
+	dataData := data.NewData(configsInterface, logger)
+	taskRepo := data.NewTaskRepo(dataData)
+	spiderService := service.NewSpiderService(configsInterface, logger, taskRepo)
+	grpcServer := server.NewGrpcServer(spiderService, configsInterface, logger)
 	httpServer := server.NewHttpServer(ctx, configsInterface, logger)
-	app := newApp(ctx, grpcServer, httpServer, configsInterface)
+	fetchRecordRepo := data.NewFetchRecordRepo(dataData)
+	resourceRepo := data.NewResourceRepo(dataData)
+	schedulerScheduler := scheduler.NewScheduler(configsInterface, logger, taskRepo, fetchRecordRepo, resourceRepo)
+	app := newApp(ctx, grpcServer, httpServer, configsInterface, schedulerScheduler)
 	return app
 }

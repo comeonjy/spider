@@ -14,23 +14,26 @@ import (
 
 	"github.com/comeonjy/go-kit/pkg/xenv"
 	"github.com/comeonjy/go-kit/pkg/xsync"
-	"spider/configs"
 	"google.golang.org/grpc"
+	"spider/configs"
+	"spider/internal/scheduler"
 )
 
 type App struct {
-	ctx  context.Context
-	grpc *grpc.Server
-	http *http.Server
-	conf configs.Interface
+	ctx      context.Context
+	grpc     *grpc.Server
+	http     *http.Server
+	schedule *scheduler.Scheduler
+	conf     configs.Interface
 }
 
-func newApp( ctx context.Context,grpc *grpc.Server, http *http.Server, conf configs.Interface) *App {
+func newApp(ctx context.Context, grpc *grpc.Server, http *http.Server, conf configs.Interface, schedule *scheduler.Scheduler) *App {
 	return &App{
-		grpc: grpc,
-		http: http,
-		conf: conf,
-		ctx:  ctx,
+		grpc:     grpc,
+		http:     http,
+		schedule: schedule,
+		conf:     conf,
+		ctx:      ctx,
 	}
 }
 
@@ -41,6 +44,9 @@ func (app *App) Run(cancel context.CancelFunc) error {
 	})
 	g.Go(func(ctx context.Context) error {
 		return app.runHttp()
+	})
+	g.Go(func(ctx context.Context) error {
+		return app.schedule.Run()
 	})
 	if xenv.IsDebug(app.conf.Get().Mode) {
 		g.Go(func(ctx context.Context) error {
