@@ -36,7 +36,9 @@ func (TaskModel) TableName() string {
 type TaskRepo interface {
 	Get(ctx context.Context, id int) (*TaskModel, error)
 	TakeOne(ctx context.Context) (*TaskModel, error)
-	SetOffset(ctx context.Context, offset uint64) error
+	TakeN(ctx context.Context, num int) ([]TaskModel, error)
+	SetOffset(ctx context.Context, taskUUID string, offset uint64) error
+	UpdateState(ctx context.Context, taskUUID string, state TaskState) error
 }
 
 func NewTaskRepo(data *Data) TaskRepo {
@@ -56,7 +58,14 @@ func (r taskRepo) TakeOne(ctx context.Context) (*TaskModel, error) {
 	err := r.db.Model(&TaskModel{}).Where("state in (?,?)", TaskStateNormal, TaskStateWorking).First(&task).Error
 	return &task, err
 }
-
-func (r taskRepo) SetOffset(ctx context.Context, offset uint64) error {
-	return r.db.Model(&TaskModel{}).Update("fetch_offset", offset).Error
+func (r taskRepo) TakeN(ctx context.Context, num int) ([]TaskModel, error) {
+	tasks := make([]TaskModel, 0)
+	err := r.db.Model(&TaskModel{}).Where("state in (?,?)", TaskStateNormal, TaskStateWorking).Order("id desc").Find(&tasks).Error
+	return tasks, err
+}
+func (r taskRepo) SetOffset(ctx context.Context, taskUUID string, offset uint64) error {
+	return r.db.Model(&TaskModel{}).Where("uuid", taskUUID).Update("fetch_offset", offset).Error
+}
+func (r taskRepo) UpdateState(ctx context.Context, taskUUID string, state TaskState) error {
+	return r.db.Model(&TaskModel{}).Where("uuid = ?", taskUUID).Update("state", state).Error
 }

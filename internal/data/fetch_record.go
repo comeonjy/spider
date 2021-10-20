@@ -29,10 +29,10 @@ func (FetchRecordModel) TableName() string {
 }
 
 type FetchRecordRepo interface {
-	Get(ctx context.Context,id int) (*FetchRecordModel, error)
-	Scan(ctx context.Context,offsetID uint64, limit int) ([]FetchRecordModel, error)
-	UpdateState(ctx context.Context,recordID uint64, state FetchState) error
-	BatchCreate(ctx context.Context,list []FetchRecordModel) error
+	Exist(ctx context.Context, taskUUID string, url string) (bool, error)
+	Scan(ctx context.Context, offsetID uint64, limit int) ([]FetchRecordModel, error)
+	UpdateState(ctx context.Context, recordID uint64, state FetchState) error
+	BatchCreate(ctx context.Context, list []FetchRecordModel) error
 }
 
 func NewFetchRecordRepo(data *Data) FetchRecordRepo {
@@ -43,21 +43,23 @@ type fetchRecordRepo struct {
 	db *gorm.DB
 }
 
-func (r fetchRecordRepo) Get(ctx context.Context,id int) (*FetchRecordModel, error) {
-	return &FetchRecordModel{}, nil
+func (r fetchRecordRepo) Exist(ctx context.Context, taskUUID string, url string) (bool, error) {
+	var count int64
+	err := r.db.Model(&FetchRecordModel{}).Where("task_uuid = ?", taskUUID).Where("url = ?", url).Count(&count).Error
+	return count > 0, err
 }
 
-func (r fetchRecordRepo) Scan(ctx context.Context,offsetID uint64, limit int) ([]FetchRecordModel, error) {
+func (r fetchRecordRepo) Scan(ctx context.Context, offsetID uint64, limit int) ([]FetchRecordModel, error) {
 	records := make([]FetchRecordModel, 0)
 	err := r.db.Model(&FetchRecordModel{}).Where("id > ?", offsetID).Limit(limit).Find(&records).Error
 	return records, err
 }
 
-func (r fetchRecordRepo) UpdateState(ctx context.Context,recordID uint64, state FetchState) error {
+func (r fetchRecordRepo) UpdateState(ctx context.Context, recordID uint64, state FetchState) error {
 	err := r.db.Model(&FetchRecordModel{}).Where("id = ?", recordID).Update("state", state).Error
 	return err
 }
 
-func (r fetchRecordRepo) BatchCreate(ctx context.Context,list []FetchRecordModel) error {
+func (r fetchRecordRepo) BatchCreate(ctx context.Context, list []FetchRecordModel) error {
 	return r.db.Create(&list).Error
 }

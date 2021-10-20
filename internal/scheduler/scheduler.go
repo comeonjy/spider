@@ -5,6 +5,7 @@ package scheduler
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/comeonjy/go-kit/pkg/xlog"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/wire"
 	"spider/configs"
 	"spider/internal/data"
+	"spider/internal/scheduler/worker"
 )
 
 var ProviderSet = wire.NewSet(NewScheduler)
@@ -22,6 +24,9 @@ type Scheduler struct {
 	taskRepo     data.TaskRepo
 	recordRepo   data.FetchRecordRepo
 	resourceRepo data.ResourceRepo
+	workChan     chan Request
+	out          chan Resource
+	concurrent   int
 }
 
 func NewScheduler(cfg configs.Interface, logger *xlog.Logger, taskRepo data.TaskRepo, recordRepo data.FetchRecordRepo, resourceRepo data.ResourceRepo) *Scheduler {
@@ -31,6 +36,9 @@ func NewScheduler(cfg configs.Interface, logger *xlog.Logger, taskRepo data.Task
 		taskRepo:     taskRepo,
 		recordRepo:   recordRepo,
 		resourceRepo: resourceRepo,
+		workChan:     make(chan Request),
+		out:          make(chan Resource),
+		concurrent:   2,
 	}
 }
 
@@ -46,97 +54,129 @@ type Resource struct {
 }
 
 func (s *Scheduler) Run() error {
-	workChan := make(chan Request)
-	out := make(chan Resource)
-	finish := make(chan struct{}, 1)
-	finish <- struct{}{}
-
-	var err error
+	finish := make(chan struct{})
 
 	xsync.NewGroup().Go(func(ctx context.Context) error {
-		return s.Save(ctx, out)
+		return s.Save(ctx)
 	})
 
 	xsync.NewGroup().Go(func(ctx context.Context) error {
-		return s.Worker(ctx, workChan, out)
+		finish <- struct{}{}
+		return s.Worker(ctx)
 	})
 
 	ticker := time.NewTicker(time.Second * 10)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var flag bool
 	for {
-		ctx, cancel := context.WithCancel(context.Background())
-		g := xsync.NewGroup(xsync.WithContext(ctx))
 		select {
 		case <-ticker.C:
-			if !s.conf.Get().RunSpider {
-				cancel()
+			flag = s.conf.Get().RunSpider == "true"
+			if !flag {
+				if cancel != nil {
+					cancel()
+					flag = false
+				}
 				continue
 			}
+			flag = true
 		case <-finish:
 			ctx, cancel = context.WithCancel(context.Background())
-
-			one := &data.TaskModel{}
-			one, err = s.taskRepo.TakeOne(ctx)
-			if err != nil {
-				s.logger.Error(ctx, err.Error())
-				time.Sleep(time.Second * 10)
-				continue
-			}
-			if one.State == data.TaskStateNormal {
-				workChan <- Request{
-					TaskUUID: one.UUID,
-					Url:      one.Entrance,
+			xsync.NewGroup(xsync.WithContext(ctx)).Go(func(ctx context.Context) error {
+				if err := s.Start(ctx); err != nil {
+					s.logger.Error(ctx, err.Error())
+					cancel()
+					return err
 				}
-			}
-			g.Go(func(ctx context.Context) error {
-				return s.Scan(ctx, one, workChan, finish)
+				for {
+					if flag {
+						break
+					}
+					time.Sleep(time.Second)
+				}
+				finish <- struct{}{}
+				return nil
 			})
 		}
 	}
 }
 
-func (s *Scheduler) Worker(ctx context.Context, workChan chan Request, out chan Resource) error {
-	for v := range workChan {
-		time.Sleep(time.Second)
-		out <- Resource{
-			Request: v,
-			Data:    "test",
-			Urls:    []string{v.Url},
+func (s *Scheduler) Start(ctx context.Context) error {
+	tasks, err := s.taskRepo.TakeN(ctx, s.concurrent)
+	if err != nil {
+		s.logger.Error(ctx, err.Error())
+		return err
+	}
+	g := xsync.NewGroup(xsync.WithContext(ctx))
+	for _, one := range tasks {
+		if one.State == data.TaskStateNormal {
+			s.workChan <- Request{
+				TaskUUID: one.UUID,
+				Url:      one.Entrance,
+			}
+			if err := s.taskRepo.UpdateState(ctx, one.UUID, data.TaskStateWorking); err != nil {
+				return err
+			}
 		}
+		g.Go(func(ctx context.Context) error {
+			return s.Scan(ctx, one)
+		})
+	}
+	g.Wait()
+	return nil
+}
+
+func (s *Scheduler) Worker(ctx context.Context) error {
+	for v := range s.workChan {
+		info, urls, err := worker.Work(v.Url)
+		if err != nil {
+			return err
+		}
+		s.out <- Resource{
+			Request: v,
+			Data:    info,
+			Urls:    urls,
+		}
+		log.Println("fetch :", v.Url)
 	}
 	return nil
 }
 
-func (s *Scheduler) Save(ctx context.Context, out chan Resource) error {
-	for v := range out {
-		if !IsExist(v.Url) {
-			if err := s.resourceRepo.Insert(ctx, &data.ResourceModel{
-				TaskUUID: v.TaskUUID,
-				Url:      v.Url,
-				Content:  v.Data,
-			}); err != nil {
-				s.logger.Error(ctx, err.Error())
-			}
-			records := make([]data.FetchRecordModel, 0)
-			for _, url := range v.Urls {
+func (s *Scheduler) Save(ctx context.Context) error {
+	for v := range s.out {
+
+		if err := s.resourceRepo.Insert(ctx, &data.ResourceModel{
+			TaskUUID: v.TaskUUID,
+			Url:      v.Url,
+			Content:  v.Data,
+		}); err != nil {
+			s.logger.Error(ctx, err.Error())
+		}
+		records := make([]data.FetchRecordModel, 0)
+		for _, url := range v.Urls {
+			if !s.IsExist(v.TaskUUID, v.Url) {
 				records = append(records, data.FetchRecordModel{
 					TaskUUID: v.TaskUUID,
 					Url:      url,
 					State:    data.FetchStateNormal,
 				})
 			}
-			if err := s.recordRepo.BatchCreate(ctx, records); err != nil {
-				s.logger.Error(ctx, err.Error())
-			}
 		}
+		if err := s.recordRepo.BatchCreate(ctx, records); err != nil {
+			s.logger.Error(ctx, err.Error())
+		}
+
 	}
 	return nil
 }
 
-func IsExist(url string) bool {
-	return false
+func (s *Scheduler) IsExist(taskUUID string, url string) bool {
+	isExist, _ := s.recordRepo.Exist(context.Background(), taskUUID, url)
+	return isExist
 }
 
-func (s *Scheduler) Scan(ctx context.Context, task *data.TaskModel, workChan chan Request, finish chan struct{}) error {
+func (s *Scheduler) Scan(ctx context.Context, task data.TaskModel) error {
 	for {
 		finishTime := time.Now()
 		select {
@@ -145,14 +185,13 @@ func (s *Scheduler) Scan(ctx context.Context, task *data.TaskModel, workChan cha
 		default:
 			list, err := s.recordRepo.Scan(ctx, task.FetchOffset, 10)
 			if err != nil {
-				s.logger.Error(context.TODO(), err.Error())
+				s.logger.Error(ctx, err.Error())
 				time.Sleep(time.Second * 10)
 				continue
 			}
 			if len(list) == 0 {
 				if time.Now().Sub(finishTime) > time.Minute {
-					finish <- struct{}{}
-					return nil
+					return s.taskRepo.UpdateState(ctx, task.UUID, data.TaskStateFinish)
 				}
 				time.Sleep(time.Second * 10)
 				continue
@@ -164,12 +203,12 @@ func (s *Scheduler) Scan(ctx context.Context, task *data.TaskModel, workChan cha
 					s.logger.Error(ctx, err.Error())
 					continue
 				}
-				if err := s.taskRepo.SetOffset(ctx, v.Id); err != nil {
+				if err := s.taskRepo.SetOffset(ctx, v.TaskUUID, v.Id); err != nil {
 					s.logger.Error(ctx, err.Error())
 					continue
 				}
 				task.FetchOffset = v.Id
-				workChan <- Request{
+				s.workChan <- Request{
 					TaskUUID: v.TaskUUID,
 					Url:      v.Url,
 				}

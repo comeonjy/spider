@@ -19,6 +19,8 @@ require (
 )
 
 require (
+	github.com/PuerkitoBio/goquery v1.7.1 // indirect
+	github.com/andybalholm/cascadia v1.2.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/elastic/go-licenser v0.3.1 // indirect
 	github.com/elastic/go-sysinfo v1.1.1 // indirect
